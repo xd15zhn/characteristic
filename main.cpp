@@ -8,7 +8,7 @@ int main()
     constexpr double b = 1.1;
     constexpr double c = 2.1;
     cout << "start." << endl;
-    Simulator sim1(100);
+    Simulator sim1(1);
     FUConstant(inu, &sim1);
     FUZOH(zoh1, &sim1);
     FUOutput(out1, &sim1);
@@ -33,21 +33,22 @@ int main()
     idf->Set_SampleTime(0.05);
     dtf2->Set_SampleTime(0.05);
     inu->Set_OutValue(10);
-    out1->Set_EnableStore(false);
-    out2->Set_EnableStore(false);
-    out3->Set_EnableStore(false);
-    sim1.Set_EnableStore(false);
+    // out1->Set_EnableStore(false);
+    // out2->Set_EnableStore(false);
+    // out3->Set_EnableStore(false);
+    // sim1.Set_EnableStore(false);
     sim1.Initialize();
     double t = 0;
-    sim1.Simulate_FirstStep();
-    while (t<20) {
-        t = sim1.Get_t();
-        sim1.Simulate_OneStep();
-    }
-    cout << "a:  " << out1->Get_OutValue() << "    ";
-    cout << "b:  " << out2->Get_OutValue() << "    ";
-    cout << "c:  " << out3->Get_OutValue() << "    ";
-    cout << endl;
+    // sim1.Simulate_FirstStep();
+    // while (t<20) {
+    //     t = sim1.Get_t();
+    //     sim1.Simulate_OneStep();
+    // }
+    // cout << "a:  " << out1->Get_OutValue() << "    ";
+    // cout << "b:  " << out2->Get_OutValue() << "    ";
+    // cout << "c:  " << out3->Get_OutValue() << "    ";
+    // cout << endl;
     sim1.Simulate();
+    sim1.Plot();
     return 0;
 }

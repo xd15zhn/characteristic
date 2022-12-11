@@ -12,14 +12,12 @@ class LeastSquare: public PackModule
 {
 public:
     LeastSquare() {};
-    LeastSquare(Simulator *sim){
+    LeastSquare(Simulator *sim, uint order) : _order(order) {
         Initialize(sim);
     };
     virtual PUnitModule Get_InputPort(int n) const {
         if (n==0) return iny;
-        if (n==1) return inx1;
-        if (n==2) return inx2;
-        if (n==3) return inx3;
+        if ((n>=1) && (n<=_order)) return inx[n-1];
         return nullptr;
     };
     virtual PMatModule Get_OutputBus(int n) const {
@@ -35,20 +33,19 @@ public:
     }
     void Initialize(Simulator *sim) {
         SUGain(iny, sim);
-        SUGain(inx1, sim);
-        SUGain(inx2, sim);
-        SUGain(inx3, sim);
-        msstheta = new MStateSpace(sim, BusSize(3, 1), SIMUCPP_DISCRETE, "msstheta");
-        mssP = new MStateSpace(sim, BusSize(3, 3), SIMUCPP_DISCRETE, "mssP");
-        mxX = new Mux(sim, BusSize(3, 1), "mxX");
+        inx = new UGain*[_order];
+        for (uint i = 0; i < _order; i++)
+            inx[i] = new UGain(sim, "inx");
+        msstheta = new MStateSpace(sim, BusSize(_order, 1), SIMUCPP_DISCRETE, "msstheta");
+        mssP = new MStateSpace(sim, BusSize(_order, _order), SIMUCPP_DISCRETE, "mssP");
+        mxX = new Mux(sim, BusSize(_order, 1), "mxX");
         mxY = new Mux(sim, BusSize(1, 1), "mxY");
-        misoK = new MFcnMISO(sim, BusSize(3, 1), "misoK");
-        misoP = new MFcnMISO(sim, BusSize(3, 3), "misoP");
-        misoTheta = new MFcnMISO(sim, BusSize(3, 1), "misoTheta");
+        misoK = new MFcnMISO(sim, BusSize(_order, 1), "misoK");
+        misoP = new MFcnMISO(sim, BusSize(_order, _order), "misoP");
+        misoTheta = new MFcnMISO(sim, BusSize(_order, 1), "misoTheta");
         // mxX := x(k)
-        sim->connectU(inx1, mxX, BusSize(0, 0));  // inx2 := x_1 := x^2
-        sim->connectU(inx2, mxX, BusSize(1, 0));  // inx1 := x_2 := x
-        sim->connectU(inx3, mxX, BusSize(2, 0));  // inx0 := x_3 := 1
+        for (uint i = 0; i < _order; i++)
+            sim->connectU(inx[i], mxX, BusSize(i, 0));
         // misoK := K(k)
         sim->connectM(mxX, misoK);  // mxX := x(k)
         sim->connectM(mssP, misoK);  // mssP := P(k-1)
@@ -65,15 +62,15 @@ public:
         sim->connectM(msstheta, misoTheta);  // msstheta := θ(k-1)
         sim->connectM(misoTheta, msstheta);  // msstheta := θ(k-1)
 
-        mssP->Set_InitialValue(eye(3)*1e6);
-        misoK->Set_Function([](Mat *u){
+        mssP->Set_InitialValue(eye(_order)*1e6);
+        misoK->Set_Function([=](Mat *u){
             Mat ans = u[1] * u[0];  // ans = P(k-1)x(k)
             Mat den = u[0].T() * ans;  // den = x(k)^TP(k-1)x(k)
-            double c = 1 / (den.at(0, 0) + 1);  // c = 1/(1+x(k)^TP(k-1)x(k))
+            double c = 1 / (den.at(0, 0) + _lambda);  // c = 1/(λ+x(k)^TP(k-1)x(k))
             return ans * c;  // K(k) = (1/(1+x(k)^TP(k-1)x(k))) * P(k-1)x(k)
         });
-        misoP->Set_Function([](Mat *u){
-            Mat ans = eye(3) - u[0] * u[1].T();  // ans = I - K(k)x(k)^T
+        misoP->Set_Function([=](Mat *u){
+            Mat ans = eye(_order) - u[0] * u[1].T();  // ans = I - K(k)x(k)^T
             return ans * u[2];  // P(k) = (I - K(k)x(k)^T) * P(k-1)
         });
         misoTheta->Set_Function([](Mat *u){
@@ -83,11 +80,11 @@ public:
             return ans + u[3];  // θ(k) = K(k) * (y(k) - x(k)^Tθ(k-1)) + θ(k-1)
         });
     }
+    double _lambda=0.8;  // 遗忘因子
+    uint _order;  // 待辨识参数个数
 private:
     UGain *iny=nullptr;  // y
-    UGain *inx1=nullptr;  // x1
-    UGain *inx2=nullptr;  // x2
-    UGain *inx3=nullptr;  // x3
+    UGain **inx=nullptr;  // xi
     MStateSpace *msstheta=nullptr;  // θ(k)
     MStateSpace *mssP=nullptr;  // P(k)
     Mux *mxX=nullptr;  // x=[x1; x2; x3]
@@ -130,7 +127,7 @@ public:
         SUUnitDelay(udy1, sim);
         SUUnitDelay(udy2, sim);
         SUUnitDelay(udu, sim);
-        ls = new LeastSquare(sim);
+        ls = new LeastSquare(sim, 3);
         sim->connectU(iny, udy1);
         sim->connectU(udy1, udy2);
         sim->connectU(inu, udu);
